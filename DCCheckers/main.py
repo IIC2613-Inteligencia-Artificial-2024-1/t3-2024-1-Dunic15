@@ -1,146 +1,181 @@
 import os
-import pygame
-from checkers.constants import WIDTH, HEIGHT, SQUARE_SIZE, WHITE, BLACK, MONTECARLO, MINIMAX, HUMAN
-from checkers.game import Game
-from AI.minimax import minimax
-from AI.mcts import MCTS
-import time
-FPS = 60
+from visualization import VizMap
+from search import bfs, dfs, recursive_best_first_search, a_star, inverted_dfs
 
-CURRENT_DIR = os.path.dirname(__file__)
+CWD = os.path.dirname(__file__)
 
-WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption('Checkers')
+viz = True
+MAP_PATH = f"{CWD}/tests/test_4.txt"
 
-def get_row_col_from_mouse(pos):
-    x, y = pos
-    row = y // SQUARE_SIZE
-    col = x // SQUARE_SIZE
-    return row, col
+ASTAR_COLOR = (255, 200, 64)
+DFS_COLOR = (234, 130, 229)
+BFS_COLOR = (70, 191, 238)
+RBFS_COLOR = (208, 62, 25)
+IDFS_COLOR = (219, 133, 28)
 
-def main():
-    run = True
-    clock = pygame.time.Clock()
+class Cell:
+    def __init__(self, pos_x, pos_y, cell_type):
+        self.pos_x = pos_x
+        self.pos_y = pos_y
+        self.cell_type = cell_type
+        self.cost = 1
+        self.parent = None
+
+        self.right_neigh = None
+        self.left_neigh = None
+        self.top_neigh = None
+        self.down_neigh = None
+
+    def __str__(self):
+        if (self.cell_type == "P"):
+            return " "
+        else:
+            return self.cell_type
+
+    def __repr__(self):
+        return f"{self.cell_type}"
     
-    # Puedes determinar si los jugadores son controlados por la IA o por humanos, 
-    # asignándoles MONTECARLO, MINIMAX o HUMAN.
-    white_algorithm = MONTECARLO
-    black_algorithm = HUMAN
+    def get_moves(self):
+        moves = []
+        if self.top_neigh is not None:
+            if self.top_neigh.cell_type != "B":
+                moves.append(["u", self.top_neigh])
+        if self.down_neigh is not None:
+            if self.down_neigh.cell_type != "B":
+                moves.append(["d", self.down_neigh])
+        if self.right_neigh is not None:
+            if self.right_neigh.cell_type != "B":
+                moves.append(["r", self.right_neigh])
+        if self.left_neigh is not None:
+            if self.left_neigh.cell_type != "B":
+                moves.append(["l", self.left_neigh])
     
-    # Puedes elegir si quieres que MINIMAX muestre los movimientos
-    # que evalua en cada jugada cambiando la siguiente variable a True
-    show_moves_minimax = False
+        return moves
 
-    # Profundidad de busqueda para Minimax en las fichas blancas y negras
-    white_depth = 2
-    black_depth = 2
+class Maze:
+    def __init__(self):
+        self.cells = []
+        self.goal = None
+        self.start = None
+        self.current_cell = None
+        self.goal_cell = None
+        pass
 
-    # Puedes cambiar la velocidad de la animación cambiando el valor de wait_time (milisegundos)
-    wait_time = 0
-
-    # Activar alphabeta pruning 
-    # (Cambia esta variable a True cuando lo hayas implementado)
-    alphabeta = False
-
-    game = Game(WIN, show_moves_minimax, wait_time)
-    new_board = game.board
-
-    # Variables para calcular el tiempo promedio de búsqueda
-    total_white_search_time = 0
-    total_black_search_time = 0
-    num_white_searches = 0
-    num_black_searches = 0
-
-
-    MONTE_CARLO_THINK_TIME = 2
-
-    while run:
-        clock.tick(FPS)
+    def create_maze(self, maze_list):
+        maze_list = maze_list[::-1] # invertimos la lista para comenzar x=0 e y=0 en la esq inferior izq como plano cartesiano 
         
-        if game.turn == WHITE and white_algorithm != HUMAN:
-            start_time = time.time()
-
-            if white_algorithm == MINIMAX:
-                value, new_board = minimax(game.get_board(), white_depth, WHITE, BLACK, game, alphabeta)
-
-            elif white_algorithm == MONTECARLO: 
-                over = True if game.winner() else False
-                MonteCarlo = MCTS(game.get_board(), WHITE, over)
-                MonteCarlo.search(MONTE_CARLO_THINK_TIME)
-                num_rollouts, run_time = MonteCarlo.statistics()
-                print("Statistics: ", num_rollouts, "rollouts in", run_time, "seconds")
-                move = MonteCarlo.best_move()
-                new_board = move
-
-            if new_board is not None:
-                game.ai_move(new_board)
-                total_white_search_time += time.time() - start_time
-                num_white_searches += 1
+        self.cells.append([Cell(pos_x=e, pos_y=0, cell_type="B") for e in range(len(maze_list[0]) + 2)])
         
-        elif game.turn == BLACK and black_algorithm != HUMAN:
-            start_time = time.time()
+        for i in range(len(maze_list)):
+            self.cells.append([])
+            self.cells[i+1].append(Cell(pos_x=0, pos_y=i+1, cell_type="B"))
 
-            if black_algorithm == MINIMAX:
-                value, new_board = minimax(game.get_board(), black_depth, BLACK, WHITE, game, alphabeta)
-
-            elif black_algorithm == MONTECARLO: 
-                over = True if game.winner() else False
-                MonteCarlo = MCTS(game.get_board(), BLACK, over)
-                MonteCarlo.search(MONTE_CARLO_THINK_TIME)
-                num_rollouts, run_time = MonteCarlo.statistics()
-                print("Statistics: ", num_rollouts, "rollouts in", run_time, "seconds")
-                move = MonteCarlo.best_move()
-                new_board = move
-
-
-
-            if new_board is not None:
-                game.ai_move(new_board)
-                total_black_search_time += time.time() - start_time
-                num_black_searches += 1
-            
-
-        if game.winner() is not None:
-            if game.winner() == BLACK:
-                print(f"BLACK {black_algorithm} WINS")
-            else:
-                print(f"WHITE {white_algorithm} WINS")
-            run = False
-
-
-        if new_board is None:
-            if game.turn == BLACK:
-                print(f"WHITE {white_algorithm} WINS")
-            elif game.turn == WHITE:
-                print(f"BLACK {black_algorithm} WINS")
-
-            run = False
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run = False
-            
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                row, col = get_row_col_from_mouse(pos)
-                game.select(row, col)
-                # piece = game.piece_selected()
-
-                # if not game.select(row, col):
-                #   move = (row, col)
-                #   print(piece.piece_coordinates(), move)
-
-        game.update()
+            for a in range(len(maze_list[0])):
+                self.cells[i+1].append(Cell(pos_x=a+1, pos_y=i+1, cell_type=maze_list[i][a]))
+                if maze_list[i][a] == "G":
+                    self.goal = (a+1, i+1)
+                    self.goal_cell = self.cells[i+1][a+1]
+                if maze_list[i][a] == "S":
+                    self.start = (a+1, i+1)
+                    self.current_cell = self.cells[i+1][a+1]
+                if maze_list[i][a] == "A":
+                    self.cells[i+1][a+1].cost = 0.5
+                if maze_list[i][a] == "M":
+                    self.cells[i+1][a+1].cost = 2
+                
+                    
+            self.cells[i+1].append(Cell(pos_x=len(maze_list[0])+1, pos_y=i+1, cell_type="B"))
+        
+        self.cells.append([Cell(pos_x=i, pos_y=len(maze_list)+1, cell_type="B") for i in range(len(maze_list[0]) + 2)])
+        self.cells = self.cells[::-1]
+        self.set_neighbours()
     
-    pygame.quit()
+    def set_neighbours(self):
+        self.cells = self.cells[::-1]
+        for i in range(1, len(self.cells)-1):
+            for a in range(1, len(self.cells[0])-1):
+                self.cells[i][a].right_neigh = self.cells[i][a+1] if a+1 < len(self.cells[0]) else None
+                self.cells[i][a].left_neigh = self.cells[i][a-1] if a-1 > 0 else None
+                self.cells[i][a].top_neigh = self.cells[i+1][a] if i+1 < len(self.cells) else None
+                self.cells[i][a].down_neigh = self.cells[i-1][a] if i-1 > 0 else None
+        self.cells = self.cells[::-1]
 
-    if num_white_searches > 0:
-        average_white_search_time = total_white_search_time / num_white_searches
-        print(f"Tiempo promedio de búsqueda por movimiento WHITE ({white_algorithm}): {average_white_search_time:.6f} segundos")
-        #print(f"Tiempo total de búsqueda WHITE ({white_algorithm}): {total_white_search_time:.6f} segundos")
-    if num_black_searches > 0:
-        average_black_search_time = total_black_search_time / num_black_searches
-        print(f"Tiempo promedio de búsqueda por movimiento BLACK ({black_algorithm}): {average_black_search_time:.6f} segundos")
-        #print(f"Tiempo total de búsqueda BLACK ({black_algorithm}): {total_black_search_time:.6f} segundos")
+    def print_maze(self, parents_list):
+        print("-"*4*len(self.cells[0]))
+        for i in range(len(self.cells)):
+            row = "|"
+            for a in range(len(self.cells[0])):
+                if [self.cells[i][a].pos_x, self.cells[i][a].pos_y] in parents_list:
+                    if str(self.cells[i][a]) == " ":
+                        row += colortext("*").green()
+                    else:
+                        row += colortext(str(self.cells[i][a])).green()
+                else:
+                    row += str(self.cells[i][a])
+                row += " | "
+            print(row)
+            print("-"*4*len(self.cells[0]))
+        print(f"El comienzo es: {self.start}")
+        print(f"La meta es: {self.goal}")
 
-main()
+    def __getitem__(self, indieces):
+        x = indieces[0]
+        y = indieces[1]
+        return self.cells[len(self.cells)-y-1][x]
+
+if __name__ == "__main__":
+    
+    class colortext():
+        def __init__(self, text:str):
+            self.text = text
+            self.ending = '\033[0m'
+
+        def green(self):
+            return '\033[91m' + self.text + self.ending
+
+    with open(MAP_PATH, "r") as file:
+        maze_list_raw = file.readlines()
+    maze_list = []
+    for line in maze_list_raw:
+        maze_list.append(line.strip("\n").split(" "))
+
+    maze = Maze()
+    maze.create_maze(maze_list)
+
+    print(f"\nDFS\n{10 * '-'}")
+    objetivo_dfs, parents_list_dfs = dfs(maze.current_cell, maze.goal_cell)
+    
+    print(f"\nInverted DFS\n{10 * '-'}")
+    objetivo_idfs, parents_list_idfs = inverted_dfs(maze.current_cell, maze.goal_cell)
+
+    print(f"\nBFS\n{10 * '-'}")
+    objetivo_bfs, parents_list_bfs = bfs(maze.current_cell, maze.goal_cell)
+
+    print(f"\nRBFS\n{10 * '-'}")
+    objetivo_rbfs, parents_list_rbfs = recursive_best_first_search(maze.current_cell, maze.goal_cell)
+
+    print(f"\nA*\n{10 * '-'}")
+    objetivo_a_star, parents_list_a_star = a_star(maze.current_cell, maze.goal_cell)
+
+    if viz:
+        viz = VizMap(maze_list)
+
+        # Add the DFS comilon
+        viz.add_comilon(3 * viz.cell_width // 4, list(reversed(parents_list_dfs)), color = DFS_COLOR)
+
+        # Add the IDFS comilon
+        viz.add_comilon(3 * viz.cell_width // 4, list(reversed(parents_list_idfs)), color = IDFS_COLOR)
+        
+        # Add the BFS comilon
+        viz.add_comilon(3 * viz.cell_width // 4, list(reversed(parents_list_bfs)), color = BFS_COLOR)
+
+        # Add the RBFS comilon
+        viz.add_comilon(3 * viz.cell_width // 4, list(reversed(parents_list_rbfs)), color = RBFS_COLOR)
+
+        # Add the A* comilon
+        viz.add_comilon(3 * viz.cell_width // 4, list(reversed(parents_list_a_star)), color = ASTAR_COLOR)
+
+
+        while True:
+            viz.display_maze()
+            viz.time_tick()
