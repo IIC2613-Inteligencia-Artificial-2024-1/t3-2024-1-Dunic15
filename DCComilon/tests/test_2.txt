@@ -1,0 +1,10 @@
+S P M M M M P M P P
+P B B B B B B M B B
+P B M M M M M M P A
+P B M B B B B B B A
+P B P B P P P P A A
+P M M B B P B B B A
+A B M P P P B P B B
+A B B A B P P P P P
+A B A A B B B B B P
+A A A B B P P P P G
